@@ -1,54 +1,56 @@
 import 'dotenv/config';
 import dataSource from './data-source';
-import * as bcrypt from 'bcrypt';
+
 import { User } from './users/user.entity';
 import { Warehouse } from './warehouses/warehouse.entity';
 import { Item } from './items/item.entity';
+import { Activity } from './activities/activity.entity';
 
-async function seed() {
+import * as bcrypt from 'bcrypt';
+
+async function run() {
+  (dataSource.options as any).entities = [User, Warehouse, Item, Activity];
+
   await dataSource.initialize();
 
   const userRepo = dataSource.getRepository(User);
   const whRepo = dataSource.getRepository(Warehouse);
   const itemRepo = dataSource.getRepository(Item);
 
-  const adminEmail = 'admin@example.com';
-  const found = await userRepo.findOne({ where: { email: adminEmail } });
-  if (!found) {
-    const passwordHash = await bcrypt.hash('123456', 10);
-    await userRepo.save({ email: adminEmail, passwordHash });
+  const email = 'admin@example.com';
+  let admin = await userRepo.findOne({ where: { email } });
+  if (!admin) {
+    admin = userRepo.create({
+      email,
+      passwordHash: await bcrypt.hash('123456', 10),
+    });
+    await userRepo.save(admin);
   }
 
-  const names = ['Warehouse_A', 'Warehouse_B', 'Warehouse_C'];
-  const warehouses: Warehouse[] = [];
-  for (const name of names) {
-    let wh = await whRepo.findOne({ where: { name } });
-    if (!wh) {
-      wh = await whRepo.save({ name });
-    }
-    warehouses.push(wh);
+  let wh = await whRepo.findOne({ where: { name: 'Main Warehouse' } });
+  if (!wh) {
+    wh = await whRepo.save(whRepo.create({ name: 'Main Warehouse' }));
   }
 
-  for (let i = 1; i <= 10; i++) {
-    const sku = `SKU-${i.toString().padStart(5, '0')}`;
-    const exists = await itemRepo.findOne({ where: { sku } });
-    if (!exists) {
-      await itemRepo.save({
-        sku,
-        name: `Item ${i}`,
-        warehouse: warehouses[Math.floor(Math.random() * warehouses.length)],
+  const existItem = await itemRepo.findOne({ where: { name: 'Demo Item' } });
+  if (!existItem) {
+    await itemRepo.save(
+      itemRepo.create({
+        name: 'Demo Item',
+        sku: 'SKU-DEMO',
+        warehouse: wh,
         qty: 0,
-      });
-    }
+        reserveQty: 0,
+        imageUrl: 'https://picsum.photos/seed/demo/120',
+      }),
+    );
   }
 
-  console.log('✅ Seeding completed');
   await dataSource.destroy();
+  console.log('✅ Seeding completed');
 }
 
-seed().catch(async (e) => {
+run().catch((e) => {
   console.error('❌ Seed failed:', e);
-  try {
-    await dataSource.destroy();
-  } catch {}
+  process.exit(1);
 });
