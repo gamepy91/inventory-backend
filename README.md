@@ -6,7 +6,7 @@
 
 ```bash
 # Clone project
-git clone https://github.com/yourusername/inventory-backend.git
+git clone https://github.com/gamepy91/inventory-backend.git
 cd inventory-backend
 
 # Install dependencies
