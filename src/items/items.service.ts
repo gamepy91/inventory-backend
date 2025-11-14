@@ -25,22 +25,50 @@ export class ItemsService {
   }
 
   async list(q: QueryItemsDto) {
-    const { search, warehouseId, page, pageSize, orderBy, order } = q;
+    const {
+      search,
+      searchBy = 'item',
+      warehouseId,
+      page,
+      pageSize,
+      orderBy,
+      order,
+    } = q;
+
+    const orderByMap: Record<QueryItemsDto['orderBy'], string> = {
+      name: 'i.name',
+      warehouse: 'w.name',
+      qty: 'i.qty',
+      reserveQty: 'i.reserveQty',
+      updatedAt: 'i.updatedAt',
+      stockStatus: 'i.qty',
+    };
+
+    const orderColumn = orderByMap[orderBy] ?? 'i.updatedAt';
+    const direction = (order ?? 'desc').toUpperCase() as 'ASC' | 'DESC';
 
     const qb = this.itemRepo
       .createQueryBuilder('i')
       .leftJoinAndSelect('i.warehouse', 'w')
-      .orderBy(`i.${orderBy}`, order.toUpperCase() as 'ASC' | 'DESC')
+      .orderBy(orderColumn, direction)
       .skip((page - 1) * pageSize)
       .take(pageSize);
 
     if (search) {
-      qb.andWhere(
-        '(LOWER(i.name) LIKE :q OR LOWER(w.name) LIKE :q OR LOWER(i.sku) LIKE :q)',
-        { q: `%${search.toLowerCase()}%` },
-      );
+      const qStr = `%${search.toLowerCase()}%`;
+
+      if (searchBy === 'warehouse') {
+        qb.andWhere('LOWER(w.name) LIKE :q', { q: qStr });
+      } else {
+        qb.andWhere('LOWER(i.name) LIKE :q', {
+          q: qStr,
+        });
+      }
     }
-    if (warehouseId) qb.andWhere('w.id = :wid', { wid: warehouseId });
+
+    if (warehouseId) {
+      qb.andWhere('w.id = :wid', { wid: warehouseId });
+    }
 
     const [rows, total] = await qb.getManyAndCount();
 
